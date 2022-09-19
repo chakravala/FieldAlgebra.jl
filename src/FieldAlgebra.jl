@@ -1,11 +1,11 @@
 module FieldAlgebra
 
 import Base: @pure
-import UnitSystems
+import FieldConstants
 import AbstractTensors: TupleVector, Values, value, Variables
 using LinearAlgebra
 
-import UnitSystems: isconstant, Constant
+import FieldConstants: isconstant, Constant
 
 export AbstractModule, AbelianGroup, Group, LogGroup, ExpGroup
 export value, isonezero, islog, isexp, base, dimensions
@@ -21,15 +21,15 @@ struct Group{G,T,S,N} <: AbelianGroup
     v::Values{N,T}
     c::S
     @pure function Group{G,T,S,N}(v,c) where {G,T,S,N}
-        r = promoteint(UnitSystems.cache(c))
+        r = promoteint(FieldConstants.cache(c))
         new{G,T,typeof(r),N}(v,r)
     end
     @pure function Group{G,T,S,N}(v,c) where {G,T<:Rational,S,N}
-        r,p = promoteints(v),promoteint(UnitSystems.cache(c))
+        r,p = promoteints(v),promoteint(FieldConstants.cache(c))
         new{G,eltype(r),typeof(p),N}(r,p)
     end
     @pure function Group{G,T,S,N}(v::Values{T,N},c) where {G,T<:Rational,S,N}
-        r,p = promoteints(v),promoteint(UnitSystems.cache(c))
+        r,p = promoteints(v),promoteint(FieldConstants.cache(c))
         new{G,eltype(r),typeof(p),N}(r,p)
     end
 end
@@ -49,7 +49,7 @@ name(g::Group{G}) where G = G
 valname(g::Group{G}) where G = Val(G)
 dimension(g::Group{G,T,S,N} where {G,T,S}) where N = N
 value(g::Group) = g.v
-coef(g::Group) = UnitSystems.measure(g.c)
+coef(g::Group) = FieldConstants.measure(g.c)
 
 Base.:(==)(a::Group,b::Group) = a.v == b.v && a.c == b.c
 
@@ -64,7 +64,7 @@ Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(a.c))
 @pure checkints(v::Values{N,<:Integer} where N) = v
 @pure promoteint(v::T) where T<:Integer = v
 @pure promoteint(v) = checkint(v) ? Int(v) : v
-@pure promoteint(v::UnitSystems.Constant) = isone(v) ? 1 : v
+@pure promoteint(v::FieldConstants.Constant) = isone(v) ? 1 : v
 @pure promoteints(v::Values{N,<:Integer} where N) = v
 @pure promoteints(v) = checkints(v) ? Int.(v) : v
 
@@ -390,9 +390,9 @@ Base.:(==)(g::Group,f::Float64) = product(g) == f
 Base.:(==)(f::Float64,g::Group) = product(g) == f
 
 coefprod(a,b) = a*b
-coefprod(a::UnitSystems.Constant,b) = a*Constant(b)
-coefprod(a,b::UnitSystems.Constant) = Constant(a)*b
-coefprod(a::UnitSystems.Constant,b::UnitSystems.Constant) = a*b
+coefprod(a::FieldConstants.Constant,b) = a*Constant(b)
+coefprod(a,b::FieldConstants.Constant) = Constant(a)*b
+coefprod(a::FieldConstants.Constant,b::FieldConstants.Constant) = a*b
 Base.:*(a::Group{G,T,S,N} where {T,S},b::Group{G,T,S,N} where {T,S}) where {N,G} = Group(a.v+b.v,coefprod(coef(a),coef(b)),Val(G))
 Base.:/(a::Group{G,T,S,N} where {T,S},b::Group{G,T,S,N} where {T,S}) where {N,G} = Group(a.v-b.v,coefprod(coef(a),inv(coef(b))),Val(G))
 Base.:^(a::Group,b::Number) = Group(b*a.v,coef(a)^b,valname(a))

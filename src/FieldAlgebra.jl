@@ -1,7 +1,7 @@
 module FieldAlgebra
 
 import Base: @pure
-import FieldConstants
+import FieldConstants, UnitSystems
 import AbstractTensors: TupleVector, Values, value, Variables
 using LinearAlgebra
 
@@ -62,6 +62,7 @@ Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(a.c))
 @pure checkints(v::Values{N} where N) = prod(isonezero.(v.v))
 @pure checkints(v::Values{N,<:Rational} where N) = prod(isone.(denominator.(v.v)))
 @pure checkints(v::Values{N,<:Integer} where N) = v
+@pure promoteint(v::Group) = v
 @pure promoteint(v::T) where T<:Integer = v
 @pure promoteint(v) = checkint(v) ? Int(v) : v
 @pure promoteint(v::FieldConstants.Constant) = isone(v) ? 1 : v
@@ -269,7 +270,7 @@ function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙')
     iz && (isone(xc)||abs(xc)<1) && print(io, c)
     #back && printexpo(io, 10, last(x.v))
     if !isone(xc)
-        if abs(xc)<1 && !isconstant(xc)
+        if float(abs(xc))<1 && !isconstant(xc)
             print(io,'/',makeint(inv(xc)))
         else
             !iz && print(io, '⋅')
@@ -398,6 +399,7 @@ Base.:/(a::Group{G,T,S,N} where {T,S},b::Group{G,T,S,N} where {T,S}) where {N,G}
 Base.:^(a::Group,b::Number) = Group(b*a.v,coef(a)^b,valname(a))
 Base.:^(a::Group,b::Integer) = Group(b*a.v,coef(a)^b,valname(a))
 Base.:^(a::Group,b::Rational) = Group(b*a.v,coef(a)^b,valname(a))
+Base.:^(::Constant{a},b::Group) where a = Constant(a^b)
 Base.sqrt(a::Group{G,T}) where {G,T} = Group{G,T}(a.v/2,sqrt(coef(a)))
 Base.sqrt(a::Group{G,Int}) where G = Group{G,Rational{Int}}(a.v//2,sqrt(coef(a)))
 Base.cbrt(a::Group{G,T}) where {G,T} = Group{G,T}(a.v/3,cbrt(coef(a)))
@@ -448,7 +450,7 @@ checksym(x::Symbol) = true
 checksym(x::Number) = true
 checksym(x) = false
 
-checkdiv(x::Expr) = x.head == :call ? (x.args[1] == :≡ || checkdiv(x.args[3])) : false
+checkdiv(x::Expr) = x.head == :call ? (x.args[1] == :≡ || (x.args[1] ≠ :≈ && checkdiv(x.args[3]))) : false
 checkdiv(x::Number) = isinteger(x)
 checkdiv(x) = false
 
@@ -457,6 +459,7 @@ export @group
 function product end
 function hasproduct end
 factorize(x,G) = x
+Base.float(x::Group) = product(x)
 
 macro group(arg...)
     args = length(arg)==2 ? linefilter!(arg[2]).args : collect(arg[2:end])
@@ -475,7 +478,7 @@ macro group(arg...)
         val = isempty(fnci) ? val : Expr(:call,:*,gen(vals[fnci],fnci),val)
         val = isempty(fcm) ? val : quote
             out = $val
-            if izero($(Expr(:call,:+,[:(abs(g.v[$i])) for i ∈ fcm]...)))
+            if iszero($(Expr(:call,:+,[:(abs(g.v[$i])) for i ∈ fcm]...)))
                 out
             else
                 $(Expr(:call,:*,:out,gen(vals[fcm],fcm)))

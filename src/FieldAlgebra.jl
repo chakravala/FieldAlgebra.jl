@@ -1,11 +1,11 @@
 module FieldAlgebra
 
 import Base: @pure
-import FieldConstants, UnitSystems
+import FieldConstants
 import AbstractTensors: TupleVector, Values, value, Variables
 using LinearAlgebra
 
-import FieldConstants: isconstant, Constant
+import FieldConstants: isconstant, Constant, measure
 
 export AbstractModule, AbelianGroup, Group, LogGroup, ExpGroup
 export value, isonezero, islog, isexp, base, dimensions
@@ -16,6 +16,10 @@ const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 abstract type AbstractModule <: Number end
 
 abstract type AbelianGroup <: AbstractModule end
+
+isgroup(::AbelianGroup) = true
+isgroup(::Constant{G}) where G = isgroup(G)
+isgroup(x) = false
 
 struct Group{G,T,S,N} <: AbelianGroup
     v::Values{N,T}
@@ -53,7 +57,7 @@ coef(g::Group) = FieldConstants.measure(g.c)
 
 Base.:(==)(a::Group,b::Group) = a.v == b.v && a.c == b.c
 
-Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(a.c))
+Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(measure(a.c)))
 
 @pure isonezero(x) = isone(x) || iszero(x)
 @pure checkint(v::T) where T<:Integer = v
@@ -267,14 +271,14 @@ function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙')
     printdims(io,x,u)
     iz = iszero(norm(x.v))
     xc = coef(x)
-    iz && (isone(xc)||abs(xc)<1) && print(io, c)
+    iz && (isone(xc)||abs(measure(xc))<1) && print(io, c)
     #back && printexpo(io, 10, last(x.v))
     if !isone(xc)
-        if float(abs(xc))<1 && !isconstant(xc)
+        if float(abs(measure(xc)))<1 && !isgroup(xc)
             print(io,'/',makeint(inv(xc)))
         else
             !iz && print(io, '⋅')
-            if isconstant(xc)
+            if isgroup(xc)
                 print(io, '(', makeint(xc), ')')
             else
                 print(io, makeint(xc))
@@ -410,6 +414,8 @@ Base.inv(a::Group{G,T}) where {G,T} = Group{G,T}(-a.v,inv(coef(a)))
 valueat(j,k,n,z::T=1) where T = Group{n,T,Int,k}(Values{k,T}([i==j ? z : 0 for i ∈ 1:k]),1)
 Base.:*(a::Number,b::Group{G,T,S,N}) where {G,T,S,N} = times(factorize(a,Val(G)),b)
 Base.:*(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = times(a,factorize(b,Val(G)))
+Base.:*(a::Constant,b::Group{G,T,S,N}) where {G,T,S,N} = FieldConstants.param(a)*b
+Base.:*(a::Group{G,T,S,N},b::Constant) where {G,T,S,N} = a*FieldConstants.param(b)
 Base.:/(a::Number,b::Group) = a*inv(b)#
 Base.:/(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = times(a,inv(factorize(b,Val(G))))#
 
@@ -441,10 +447,10 @@ checkassign(x::Expr) = x ≠ :(Base.MathConstants.ℯ)
 checkassign(x::Number) = false
 
 checkmeasure(x) = false
-checkmeasure(x::Expr) = x.head == :≈
+checkmeasure(x::Expr) = x.head == :call && x.args[1] == :≈
 checkint2(x::Number) = isinteger(x)
 checkint2(x) = false
-gen(in,dex) = Expr(:call,:*,[:($(in[i])^FieldAlgebra.makeint(g.v[$(dex[i])])) for i ∈ 1:length(in)]...)
+gen(in,dex) = Expr(:call,:*,[:($(in[i])^makeint(g.v[$(dex[i])])) for i ∈ 1:length(in)]...)
 
 checksym(x::Symbol) = true
 checksym(x::Number) = true
@@ -456,12 +462,16 @@ checkdiv(x) = false
 
 export @group
 
-function product end
-function hasproduct end
+@pure product(::Constant{N}) where N = product(N)
+hasproduct(x::LogGroup) = hasproduct(x.v)
+hasproduct(x::ExpGroup) = hasproduct(x.v)
 factorize(x,G) = x
 Base.float(x::Group) = product(x)
 
 macro group(arg...)
+    group(arg...)
+end
+function group(arg...)
     args = length(arg)==2 ? linefilter!(arg[2]).args : collect(arg[2:end])
     vargs = symbols(args)
     N,G = length(args),QuoteNode(arg[1])
@@ -473,7 +483,7 @@ macro group(arg...)
         fncm = findall(.!cm)
         ci = checkint2.(vals[fncm])
         fci = fncm[findall(ci)]
-        val = isempty(fci) ? :(g.c) : Expr(:call,:*,gen(float.(vals[fci]),fci),:(g.c))
+        val = isempty(fci) ? :(g.c) : Expr(:call,:*,gen(float.(vals[fci]),fci),:(measure(g.c)))
         fnci = fncm[findall(.!ci)]
         val = isempty(fnci) ? val : Expr(:call,:*,gen(vals[fnci],fnci),val)
         val = isempty(fcm) ? val : quote

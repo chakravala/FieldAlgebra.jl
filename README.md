@@ -13,3 +13,5 @@ julia> ans/x
 y²
 ```
 There are more undocumented features which will be explained once the design matures.
+
+Used in [Similitude.jl](https://github.com/chakravala/Similitude.jl) and [MeasureSystems.jl](https://github.com/chakravala/MeasureSystems.jl) to implement dimensional group algebra.

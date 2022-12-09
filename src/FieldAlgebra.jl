@@ -79,6 +79,7 @@ const chars = Dict([[string(i-1)[1]=>expos[i] for i ∈ 1:length(expos)];['.'=>'
 makeint(x) = x
 @pure makint(x::Int) = x
 @pure function makeint(x::AbstractFloat)
+    iszero(x) && return(0)
     ax,rem,ne = abs(x),abs(x%1),sqrt(eps()*norm(x))
     if ne < 1
         if log10(ax)-log(1.7,rem) > 20
@@ -103,12 +104,12 @@ function latexpo(io::IO, d, x::AbstractFloat)
         if abs(x) < 1
             mix = makeint(inv(x))
             if typeof(mix) == Int
-                printexpo(io, d, 1//mix)
+                latexpo(io, d, 1//mix)
             else
                 if (d == 10 || d == "10") && length(string(abs(x)))>5
                     x < 0 && print(io, '/')
                     print(io, makeint(10^abs(x)))
-                    !(x<0) && print(io, '⋅')
+                    !(x<0) && print(io, "\\cdot ")
                 else
                     print(io, d)
                     printexpo(io, x)
@@ -118,7 +119,7 @@ function latexpo(io::IO, d, x::AbstractFloat)
             mx = makeint(abs(x))
             x < 0 && print(io, '/')
             if typeof(mx)== Int
-                printexpo(io, d, mx)
+                latexpo(io, d, mx)
             else
                 ten = makeint(10^abs(x))
                 pow = findpower(ten)
@@ -129,23 +130,151 @@ function latexpo(io::IO, d, x::AbstractFloat)
                         print(io, x < 0 ? '/' : '⋅')
                     end
                     print(io, d)
-                    printexpo(io, pow)
+                    latexpo(io, pow)
                 elseif length(string(abs(x)))>5
                     print(io, ten)
                     !(x<0) && print(io, '⋅')
                 else
-                    printexpo(io, d, rationalize(x))
+                    latexpo(io, d, rationalize(x))
                 end
                 if !iszero(pow)
                     
                 end
             end
         elseif typeof(ix) == Int
-            printexpo(io,d,ix)
+            latexpo(io,d,ix)
         else
             print(io, d)
-            printexpo(io,x)
+            latexpo(io,x)
         end
+    end
+end
+
+latexpo(io::IO, x::Integer) = !isone(x) && print(io, "^{", x, '}')
+
+function latexpo(io::IO, x::AbstractFloat)
+    if !isone(x)
+        print(io,"^{", x, '}')
+    end
+end
+
+function latexpo(io::IO, x::Rational)
+    if !isone(x)
+        print(io, "^{", x.num)
+        !isone(x.den) && print(io, '/', x.den)
+        print(io, '}')
+    end
+end
+
+function latexpo(io::IO, x::Complex)
+    if !isone(x)
+        print(io, "^{")
+        if !iszero(x.re)
+            isone(x.re) ? print(io, '1') : latexpo(io, x.re)
+            !iszero(x.im) && print(io, x.im<0 ? '-' : '+')
+        else
+            x.im<0 && print(io, '-')
+        end
+        if !iszero(x.im)
+            latexpo(io, abs(x.im))
+            print(io, "im")
+        end
+        print(io, '}')
+    end
+end
+
+function latexnum(io, b, e)
+    me = makeint(e)
+    !(me<0) && latexpo(io, b, me)
+end
+
+function latexdims(io::IO,x::Group{G,T,S,N} where {G,S},name,c="\\cdot ") where {T,N}
+    M = 0
+    if haskey(ENV,"GROUPAREN")
+        for i ∈ 1:N-M
+            printnum(io, name[i], x.v[i])
+        end
+        n = sum(first(x.v,N-M).<0)
+        n>0 && print(io, '/')
+        n>1 && print(io, '(')
+        for i ∈ 1:N-M
+            printnum(io, name[i], -x.v[i])
+            typeof(name[i])==String && isone(x.v[i]) && !iszero(norm(last(first(x.v,N-M),N-i-1))) && print(io,c)
+        end
+        n>1 && print(io, ')')
+    else
+        for i ∈ 1:N-M
+            latexpo(io, name[i], makeint(x.v[i]))
+            typeof(name[i])==String && isone(x.v[i]) && !iszero(norm(last(first(x.v,N-M),N-i-M))) && print(io,c)
+        end
+    end
+end
+
+special_print(io, x) = print(io, x)
+function special_print(io,f::Float64)
+    sf = string(f)
+    if 'e' ∈ sf
+        m = match(r"(\d+.\d+)[e](-?\d+)",sf).captures
+        print(io,"$(m[1]) \\times 10^{$(m[2])}")
+    else
+        print(io, sf)
+    end
+end
+
+latext(x) = basistext(x)
+showlatex(::Constant{x}) where x = showlatex(x)
+function showlatex(x::Group)
+    io = IOBuffer()
+    latexgroup(io,x)
+    String(take!(io))
+end
+function showlatex(D,U)
+    io = IOBuffer()
+    latexgroup(io,U(D),U)
+    String(take!(io))
+end
+function latexgroup_pre(io::IO,x,u,c="\\mathbb{1}",d="\\cdot ")
+    print(io,x)
+end
+function latexgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=latext(x),c="\\mathbb{1}",d="\\cdot ") where {T,N}
+    #back = T<:AbstractFloat && x.v[N]<0
+    #!back && printexpo(io, 10, x.v[N])
+    latexdims(io,x,u,c isa Char ? " " : u[end]≠"" ? " " : "\\cdot ")
+    iz = iszero(norm(x.v))
+    xc = coef(x)
+    iz && (isone(xc)||abs(measure(xc))<1) && print(io, c)
+    #back && printexpo(io, 10, last(x.v))
+    if !isone(xc)
+        if float(abs(measure(xc)))<1 && !isgroup(xc)
+            print(io, '/')
+            special_print(io, makeint(inv(xc)))
+        else
+            !iz && !(c isa Char) && print(io, "\\cdot ")
+            if isgroup(xc)
+                print(io, '(')
+                special_print(io, makeint(xc))
+                print(io, ')')
+            else
+                special_print(io, makeint(xc))
+            end
+        end
+    end
+end
+function latexgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=latext(x),c="\\mathbb{1}") where {T,N}
+    latexgroup_pre(io,x,u,c)
+    if hasproduct(x)
+        print(io, " = ")
+        special_print(io, product(x))
+    end
+end
+
+function latexgroup(io::IO, x::AbelianGroup, u=latext(value(x)), c="\\mathbb{1}")
+    showfun(io,x)
+    latexgroup_pre(io,value(x),u,c)
+    print(io,')')
+    if hasproduct(x)
+        print(io, " = ")
+        special_print(io, product(x))
     end
 end
 
@@ -264,8 +393,20 @@ function printnum(io, b, e)
     !(me<0) && printexpo(io, b, me)
 end
 
+print_special(io,x) = print(io,x)
+function print_special(io,f::Float64)
+    sf = string(f)
+    if 'e' ∈ sf
+        m = match(r"(\d+.\d+)[e](-?\d+)",sf).captures
+        print(io,"$(m[1])×10")
+        printexpo(io,Meta.parse(m[2]))
+    else
+        print(io, sf)
+    end
+end
+
 Base.show(io::IO,x::Group) = showgroup(io,x)
-function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
+function showgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
     #back = T<:AbstractFloat && x.v[N]<0
     #!back && printexpo(io, 10, x.v[N])
     printdims(io,x,u)
@@ -285,14 +426,23 @@ function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙')
             end
         end
     end
-    hasproduct(x) && print(io, " = ", product(x))
+end
+function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
+    showgroup_pre(io,x,u,c)
+    if hasproduct(x)
+        print(io, " = ", product(x))
+        #print_special(io, product(x))
+    end
 end
 
-function showgroup(io::IO, x::AbelianGroup, u=letters(N), c='𝟙')
+function showgroup(io::IO, x::AbelianGroup, u=basistext(value(x)), c='𝟙')
     showfun(io,x)
-    showgroup(io,exp(x),u,c)
+    showgroup_pre(io,value(x),u,c)
     print(io,')')
-    hasproduct(x) && print(io, " = ", product(x))
+    if hasproduct(x)
+        print(io, " = ", product(x))
+        #print_special(io, product(x))
+    end
 end
 
 # log
@@ -313,13 +463,19 @@ end
 
 value(g::LogGroup) = g.v
 
-Base.show(io::IO, x::LogGroup) = (showfun(io,x); print(io,value(x),')'))
+Base.show(io::IO, x::LogGroup) = showgroup(io,x)
 
 showfun(io::IO, x::LogGroup{B}) where B = print(io,"log(",B,',')
 showfun(io::IO, x::LogGroup{ℯ}) = print(io,"log(")
 showfun(io::IO, x::LogGroup{2}) = print(io,"log2(")
 showfun(io::IO, x::LogGroup{10}) = print(io,"log10(")
 showfun(io::IO, x::LogGroup{exp10(0.1)}) = print(io,"dB(")
+
+product(x::LogGroup{B}) where B = log(B,product(value(x)))
+product(x::LogGroup{ℯ}) = log(product(value(x)))
+product(x::LogGroup{2}) = log2(product(value(x)))
+product(x::LogGroup{10}) = log10(product(value(x)))
+product(x::LogGroup{exp10(0.1)}) = dB(product(value(x)))
 
 Base.log(x::AbelianGroup) = LogGroup(x)
 Base.log2(x::AbelianGroup) = LogGroup{2}(x)
@@ -353,12 +509,17 @@ end
 
 value(g::ExpGroup) = g.v
 
-Base.show(io::IO, x::ExpGroup) = (showfun(io,x); print(io,value(x),')'))
+Base.show(io::IO, x::ExpGroup) = showgroup(io,x)
 
 showfun(io::IO, x::ExpGroup{B}) where B = print(io,B,"^(")
 showfun(io::IO, x::ExpGroup{ℯ}) = print(io,"exp(")
 showfun(io::IO, x::ExpGroup{2}) = print(io,"exp2(")
 showfun(io::IO, x::ExpGroup{10}) = print(io,"exp10(")
+
+product(x::ExpGroup{B}) where B = B^product(value(x))
+product(x::ExpGroup{ℯ}) = exp(product(value(x)))
+product(x::ExpGroup{2}) = exp2(product(value(x)))
+product(x::ExpGroup{10}) = exp10(product(value(x)))
 
 Base.exp(x::AbelianGroup) = ExpGroup(x)
 Base.exp2(x::AbelianGroup) = ExpGroup{2}(x)
@@ -521,7 +682,7 @@ function group(arg...)
         nothing
     end
     out = quote
-        FieldAlgebra.basistext(x::Group{$G,T,S,$N} where {T,S}) = $(strchar(vargs))
+        FieldAlgebra.basistext(::Group{$G,T,S,$N} where {T,S}) = $(strchar(vargs))
         FieldAlgebra.hasproduct(g::Group{$G,T,S,$N}) where {T,S} = $hasval
         $([:($(esc(vargs[i])) = Constant(valueat($i,$N,$G))) for i ∈ findall(checkassign.(vargs))]...)
         $def

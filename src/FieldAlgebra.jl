@@ -5,7 +5,7 @@ import FieldConstants
 import AbstractTensors: TupleVector, Values, value, Variables
 using LinearAlgebra
 
-import FieldConstants: isconstant, Constant, measure
+import FieldConstants: isconstant, Constant, measure, logdb, expdb, dB
 
 export AbstractModule, AbelianGroup, Group, LogGroup, ExpGroup
 export value, isonezero, islog, isexp, base, dimensions
@@ -239,7 +239,7 @@ end
 function latexgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=latext(x),c="\\mathbb{1}",d="\\cdot ") where {T,N}
     #back = T<:AbstractFloat && x.v[N]<0
     #!back && printexpo(io, 10, x.v[N])
-    latexdims(io,x,u,c isa Char ? " " : u[end]≠"" ? " " : "\\cdot ")
+    latexdims(io,x,u,c isa Char ? d : u[end]≠"" ? d : "\\cdot ")
     iz = iszero(norm(x.v))
     xc = coef(x)
     iz && (isone(xc)||abs(measure(xc))<1) && print(io, c)
@@ -252,7 +252,8 @@ function latexgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=latext(x),c="\\ma
             !iz && !(c isa Char) && print(io, "\\cdot ")
             if isgroup(xc)
                 print(io, '(')
-                special_print(io, makeint(xc))
+                latexgroup_pre(io,xc,latext(xc),c,d)
+                #special_print(io, float(xc))
                 print(io, ')')
             else
                 special_print(io, makeint(xc))

@@ -7,7 +7,7 @@
 
 Work in progress of abelian `Group` implementation which is extended to `Field` algebra.
 ```Julia
-julia> @group xyz x y z
+julia> @ring xyz x y z
 
 julia> x*y^2
 xy²

@@ -78,6 +78,7 @@ coef(g::Group) = FieldConstants.measure(g.c)
 Base.:(==)(a::Group,b::Group) = a.v == b.v && a.c == b.c
 
 Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(measure(a.c)))
+Base.signbit(g::Group) = signbit(g.c)
 
 @pure isonezero(x) = isone(x) || iszero(x)
 @pure checkint(v::T) where T<:Integer = v
@@ -576,6 +577,8 @@ Base.iszero(x::LogGroup) = isone(value(x))
 Base.:(==)(g::Group,f::Float64) = product(g) == f
 Base.:(==)(f::Float64,g::Group) = product(g) == f
 
+Base.:-(g::Group) = Group(g.v,-g.c,valname(g))
+
 coefprod(a,b) = a*b
 coefprod(a::FieldConstants.Constant,b) = a*Constant(b)
 coefprod(a,b::FieldConstants.Constant) = Constant(a)*b
@@ -642,7 +645,7 @@ checkdiv(x::Expr) = x.head == :call ? (x.args[1] == :≡ || (x.args[1] ≠ :≈ 
 checkdiv(x::Number) = isinteger(x)
 checkdiv(x) = false
 
-export @group
+export @group, @ring
 
 @pure product(::Constant{N}) where N = product(N)
 hasproduct(x::LogGroup) = hasproduct(x.v)
@@ -650,10 +653,13 @@ hasproduct(x::ExpGroup) = hasproduct(x.v)
 factorize(x,G) = x
 Base.float(x::Group) = product(x)
 
-macro group(arg...)
-    group(arg...)
+macro ring(arg...)
+    group(:Ring,arg...)
 end
-function group(arg...)
+macro group(arg...)
+    group(:Constant,arg...)
+end
+function group(fun,arg...)
     args = length(arg)==2 ? linefilter!(arg[2]).args : collect(arg[2:end])
     vargs = symbols(args)
     N,G = length(args),QuoteNode(arg[1])
@@ -705,7 +711,7 @@ function group(arg...)
     out = quote
         FieldAlgebra.basistext(::Group{$G,T,S,$N} where {T,S}) = $(strchar(vargs))
         FieldAlgebra.hasproduct(g::Group{$G,T,S,$N}) where {T,S} = $hasval
-        $([:($(esc(vargs[i])) = Constant(valueat($i,$N,$G))) for i ∈ findall(checkassign.(vargs))]...)
+        $([:($(esc(vargs[i])) = $fun(valueat($i,$N,$G))) for i ∈ findall(checkassign.(vargs))]...)
         $def
     end
     return out #QuoteNode(out)
@@ -724,6 +730,6 @@ for i ∈ 1:dims
 end
 const usq = Values(F,M,L,T,Q,Θ,N,J,A,R,C)=#
 
-include("field.jl")
+include("ring.jl")
 
 end # module

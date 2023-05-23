@@ -1,5 +1,25 @@
 module FieldAlgebra
 
+#   This file is part of FieldAlgebra.jl
+#   It is licensed under the MIT license
+#   FieldAlgebra Copyright (C) 2022 Michael Reed
+#       _           _                         _
+#      | |         | |                       | |
+#   ___| |__   __ _| | ___ __ __ ___   ____ _| | __ _
+#  / __| '_ \ / _` | |/ / '__/ _` \ \ / / _` | |/ _` |
+# | (__| | | | (_| |   <| | | (_| |\ V / (_| | | (_| |
+#  \___|_| |_|\__,_|_|\_\_|  \__,_| \_/ \__,_|_|\__,_|
+#
+#   https://github.com/chakravala
+#   https://crucialflow.com
+#
+#  _____ _      _     _    _    _            _
+# |  ___(_) ___| | __| |  / \  | | __ _  ___| |__  _ __ __ _
+# | |_  | |/ _ \ |/ _` | / _ \ | |/ _` |/ _ \ '_ \| '__/ _` |
+# |  _| | |  __/ | (_| |/ ___ \| | (_| |  __/ |_) | | | (_| |
+# |_|   |_|\___|_|\__,_/_/   \_\_|\__, |\___|_.__/|_|  \__,_|
+#                                 |___/
+
 import Base: @pure
 import FieldConstants
 import AbstractTensors: TupleVector, Values, value, Variables
@@ -66,7 +86,7 @@ Base.abs(a::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T,S,N}(a.v,abs(measure(a.c
 @pure checkints(v::Values{N} where N) = prod(isonezero.(v.v))
 @pure checkints(v::Values{N,<:Rational} where N) = prod(isone.(denominator.(v.v)))
 @pure checkints(v::Values{N,<:Integer} where N) = v
-@pure promoteint(v::Group) = v
+@pure promoteint(v::Group) = iszero(prod(v.v)) && !isone(v.c) ? promoteint(v.c) : v
 @pure promoteint(v::T) where T<:Integer = v
 @pure promoteint(v) = checkint(v) ? Int(v) : v
 @pure promoteint(v::FieldConstants.Constant) = isone(v) ? 1 : v
@@ -703,5 +723,7 @@ for i ∈ 1:dims
     @eval const $(Symbol(isq[i])) = valueat($i,dims)
 end
 const usq = Values(F,M,L,T,Q,Θ,N,J,A,R,C)=#
+
+include("field.jl")
 
 end # module

@@ -654,12 +654,16 @@ factorize(x,G) = x
 Base.float(x::Group) = product(x)
 
 macro ring(arg...)
-    group(:Ring,arg...)
+    ring(arg...)
 end
 macro group(arg...)
-    group(:Constant,arg...)
+    group(arg...)
 end
-function group(fun,arg...)
+
+ring(arg...) = define(:Ring,arg...)
+group(arg...) = define(:Constant,arg...)
+
+function define(fun,arg...)
     args = length(arg)==2 ? linefilter!(arg[2]).args : collect(arg[2:end])
     vargs = symbols(args)
     N,G = length(args),QuoteNode(arg[1])

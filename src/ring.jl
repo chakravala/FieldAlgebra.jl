@@ -33,6 +33,24 @@ end
 
 Ring(g::Group{G,T,S,N}) where {G,T,S,N} = Ring{G,T,S,N,1}(Values((g.v,)),Values(g.c))
 
+@pure Ring{G,T}(v,c=Values(1)) where {G,T} = Ring{G,T,eltype(c),length(v),length(c)}(v,c)
+@pure Ring{G,T}(v::Values{M,Values{N,T}},c::Values{M,S}=Values(1)) where {G,T,S,N,M} = Ring{G,T,S,N,M}(v,c)
+@pure Ring(v::Values{M,Values{N,T}},c::Values{M,S}=Values(1)) where {N,T,S,M} = Ring{N,T,S,N,M}(v,c)
+@pure Ring(v::Values,c,G) = Ring(v,c,Val(G))
+@pure Ring(v::Values{M,Values{N,T}},c::Values{M,S},::Val{G}) where {N,T,S,M,G} = Ring{G,T,S,N,M}(v,c)
+
+#=@pure function Ring(v::Values{N,<:Rational},c::Values{M,S},::Val{G}) where {N,S,M,G}
+    r = promoteints(v)
+    Ring{G,eltype(r),S,N,M}(r,c)
+end=#
+
+name(g::Ring{G}) where G = G
+valname(g::Ring{G}) where G = Val(G)
+dimension(g::Ring{G,T,S,N} where {G,T,S}) where N = N
+value(g::Ring) = g.v
+coef(g::Ring) = FieldConstants.measure.(g.c)
+Base.length(g::Ring{G,T,S,N,M} where {G,T,S,N}) where M = M
+
 Base.signbit(::Ring) = false
 
 Base.zero(::Type{Ring{G,T,S,N}}) where {G,T,S,N} = Ring{G,T,S,N,0}(Values{0,Values{N,T}}(),Values{0,S}())
@@ -42,34 +60,31 @@ Base.one(::Ring{G,T,S,N}) where {G,T,S,N} = Ring{G,T,S,N,1}(Values{1,Values{N,T}
 
 (f::Ring{G,T,S,N,M})(v::Values{N}) where {G,T,S,N,M} = sum([prod(v.^f.v[i]) for i ∈ 1:M])
 
+Base.inv(a::Ring{G,T,S,N,1}) where {G,T,S,N} = Ring{G,T,S,N,1}(-a.v,Values(inv(a.c[1])))
+Base.:*(a::Number,b::Ring{G,T,S,N}) where {G,T,S,N} = times(factorize(a,Val(G)),b)
+Base.:*(a::Ring{G,T,S,N},b::Number) where {G,T,S,N} = times(a,factorize(b,Val(G)))
+Base.:/(a::Number,b::Ring) = a*inv(b)#
+Base.:/(a::Ring{G,T,S,N},b::Number) where {G,T,S,N} = times(a,inv(factorize(b,Val(G))))#
+
+times(a::Ring,b::Ring) = a*b
+times(a::Number,b::Ring{G,T,S,N}) where {G,T,S,N} = Ring{G,T}(b.v,coefprod.(Ref(a),b.c))
+times(a::Ring{G,T,S,N},b::Number) where {G,T,S,N} = Ring{G,T}(a.v,coefprod(a.c,Ref(b)))
+
 Base.:-(f::Ring{G,T,S,N,M}) where {G,T,S,N,M} = Ring{G,T,S,N,M}(f.v,-f.c)
 
 Base.:+(a::Group{G,T,S,N},b::Group{G,T,S,N}) where {G,T,S,N} = a.v≠b.v ? Ring{G,T,S,N,2}(Values(a.v,b.v),Values(a.c,b.c)) : Ring{G,T,S,N,1}(Values((a.v,)),Values(a.c+b.c))
 Base.:-(a::Group{G,T,S,N},b::Group{G,T,S,N}) where {G,T,S,N} = a.v≠b.v ? Ring{G,T,S,N,2}(Values(a.v,b.v),Values(a.c,-b.c)) : Ring{G,T,S,N,1}(Values((a.v,),Values(a.c-b.c)))
+Base.:+(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,1}) where {G,T,S,N} = a.v≠b.v ? Ring{G,T,S,N,2}(Values(a.v[1],b.v[1]),Values(a.c[1],b.c[1])) : Ring{G,T,S,N,1}(a.v,a.c+b.c)
+Base.:-(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,1}) where {G,T,S,N} = a.v≠b.v ? Ring{G,T,S,N,2}(Values(a.v[1],b.v[1]),Values(a.c[1],-b.c[1])) : Ring{G,T,S,N,1}(a.v,a.c-b.c)
+Base.:+(a::Ring{G,T,S,N,0},b::Ring{G,T,S,N,0}) where {G,T,S,N} = a
+Base.:-(a::Ring{G,T,S,N,0},b::Ring{G,T,S,N,0}) where {G,T,S,N} = a
 
-function Base.:+(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M}
+function add(a::Ring{G,T,S,N,M},bv,bc,::Val{op}) where {G,T,S,N,M,op}
     j = findfirst(z->z==b.v,a.v)
     if isnothing(j)
-        Ring{G,T,S,N,M+1}(Values((a.v...,b.v)),Values(a.c...,b.c))
+        Ring{G,T,S,N,M+1}(Values((a.v...,bv)),Values(a.c...,bc))
     else
-        c = a.c[j]+b.c
-        if iszero(c)
-            if iszero(M-1)
-                zero(Ring{G,T,S,N})
-            else
-                Ring{G,T,S,N,M-1}(Values((a.v[1:j-1]...,a.v[j+1:end]...)),Values(a.c[1:j-1]...,a.c[j+1:end]...))
-            end
-        else
-            Ring{G,T,S,N,M}(a.v,Values(a.c[1:j-1]...,c,a.c[j+1:end]...))
-        end
-    end
-end
-function Base.:-(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M}
-    j = findfirst(z->z==b.v,a.v)
-    if isnothing(j)
-        Ring{G,T,S,N,M+1}(Values((a.v...,b.v)),Values(a.c...,-b.c))
-    else
-        c = a.c[j]-b.c
+        c = op(a.c[j],bc)
         if iszero(c)
             if iszero(M-1)
                 zero(Ring{G,T,S,N})
@@ -82,40 +97,35 @@ function Base.:-(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M}
     end
 end
 
-function Base.:+(a::Group{G,T,S,N},b::Ring{G,T,S,N,M}) where {G,T,S,N,M}
-    j = findfirst(z->z==a.v,b.v)
+Base.:+(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M} = add(a,b.v,b.c,Val(+))
+Base.:-(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M} = add(a,b.v,b.c,Val(-))
+Base.:+(a::Ring{G,T,S,N,M},b::Ring{G,T,S,N,1}) where {G,T,S,N,M} = add(a,b.v[1],b.c[1],Val(+))
+Base.:-(a::Ring{G,T,S,N,M},b::Ring{G,T,S,N,1}) where {G,T,S,N,M} = add(a,b.v[1],b.c[1],Val(-))
+
+function add2(av,ac,b::Ring{G,T,S,N,M},::Val{op}) where {G,T,S,N,M,op}
+    j = findfirst(z->z==av,b.v)
     if isnothing(j)
-        Ring{G,T,S,N,M+1}(Values((a.v,b.v...)),Values(a.c,b.c...))
+        Ring{G,T,S,N,M+1}(Values((av,b.v...)),Values(ac,op(b.c)...))
     else
-        c = a.c+b.c[j]
+        c = op(ac,b.c[j])
         if iszero(c)
             if iszero(M-1)
                 zero(Ring{G,T,S,N})
             else
-                Ring{G,T,S,N,M-1}(Values((b.v[1:j-1]...,b.v[j+1:end]...)),Values(b.c[1:j-1]...,b.c[j+1:end]...))
+                bc = op(b.c)
+                Ring{G,T,S,N,M-1}(Values((b.v[1:j-1]...,b.v[j+1:end]...)),Values(bc[1:j-1]...,bc[j+1:end]...))
             end
         else
-            Ring{G,T,S,N,M}(a.v,Values(b.c[1:j-1]...,c,b.c[j+1:end]...))
+            bc = op(b.c)
+            Ring{G,T,S,N,M}(av,Values(bc[1:j-1]...,c,op(bc[j+1:end])...))
         end
     end
 end
-function Base.:-(a::Group{G,T,S,N},b::Ring{G,T,S,N,M}) where {G,T,S,N,M}
-    j = findfirst(z->z==a.v,b.v)
-    if isnothing(j)
-        Ring{G,T,S,N,M+1}(Values((a.v,b.v...)),Values(a.c,-b.c...))
-    else
-        c = a.c-b.c[j]
-        if iszero(c)
-            if iszero(M-1)
-                zero(Ring{G,T,S,N})
-            else
-                Ring{G,T,S,N,M-1}(Values((b.v[1:j-1]...,b.v[j+1:end]...)),Values(b.c[1:j-1]...,b.c[j+1:end]...))
-            end
-        else
-            Ring{G,T,S,N,M}(b.v,Values(-b.c[1:j-1]...,c,-b.c[j+1:end]...))
-        end
-    end
-end
+
+Base.:+(a::Group{G,T,S,N},b::Ring{G,T,S,N,M}) where {G,T,S,N,M} = add2(a.v,a.c,b,Val(+))
+Base.:-(a::Group{G,T,S,N},b::Ring{G,T,S,N,M}) where {G,T,S,N,M} = add2(a.v,a.c,b,Val(-))
+Base.:+(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,M}) where {G,T,S,N,M} = add2(a.v[1],a.c[1],b,Val(+))
+Base.:-(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,M}) where {G,T,S,N,M} = add2(a.v[1],a.c[1],b,Val(-))
 
 function Base.:+(a::Ring{G,T,S,N,M},b::Ring{G,T,S,N,L}) where {G,T,S,N,M,L}
     j = findall(z->z∈a.v,b.v)
@@ -152,6 +162,13 @@ function Base.:-(a::Ring{G,T,S,N,M},b::Ring{G,T,S,N,L}) where {G,T,S,N,M,L}
             Ring{G,T,S,N,l}(Values((a.v[j4]...,b.v[jjj]...)),Values(c[j4]...,-b.c[jjj]...))
         end
     end
+end
+
+function Base.:*(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,1}) where {G,T,S,N}
+    Ring{G,T,S,N,1}(a.v+b.v,a.c.*Ref(b.c[1]))
+end
+function Base.:/(a::Ring{G,T,S,N,1},b::Ring{G,T,S,N,1}) where {G,T,S,N}
+    Ring{G,T,S,N,1}(a.v-b.v,a.c./Ref(b.c[1]))
 end
 
 function Base.:*(a::Ring{G,T,S,N,M},b::Group{G,T,S,N}) where {G,T,S,N,M}

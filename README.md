@@ -1,6 +1,6 @@
 # FieldAlgebra.jl
 
-*Field algebra based on Group design*
+*Field-algebra based on Group / Ring symbolic vector module extension*
 
 [![DOI](https://zenodo.org/badge/538546202.svg)](https://zenodo.org/badge/latestdoi/538546202)
 [![Build status](https://ci.appveyor.com/api/projects/status/p8yu8cth0eoctd54?svg=true)](https://ci.appveyor.com/project/chakravala/fieldalgebra-jl)

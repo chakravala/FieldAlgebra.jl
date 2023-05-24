@@ -1,7 +1,7 @@
 name = "FieldAlgebra"
 uuid = "0b62d163-fd1d-4060-a953-4385d03545e2"
 authors = ["Michael Reed"]
-version = "0.1.5"
+version = "0.1.6"
 
 [deps]
 AbstractTensors = "a8e43f4a-99b7-5565-8bf1-0165161caaea"

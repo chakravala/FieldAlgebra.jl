@@ -22,7 +22,7 @@ module FieldAlgebra
 
 import Base: @pure
 import FieldConstants
-import AbstractTensors: TupleVector, Values, value, Variables
+import AbstractTensors: TupleVector, Values, value, Variables, countvalues
 using LinearAlgebra
 
 import FieldConstants: isconstant, Constant, measure, logdb, expdb, dB
@@ -735,5 +735,6 @@ end
 const usq = Values(F,M,L,T,Q,Θ,N,J,A,R,C)=#
 
 include("ring.jl")
+include("field.jl")
 
 end # module

@@ -388,24 +388,25 @@ function printexpo(io::IO, x::Complex)
     end
 end
 
-function printdims(io::IO,x::Group{G,T,S,N} where {G,S},name) where {T,N}
+function printdims(io::IO,xv::Values{N},name) where N
     M = 0
     if haskey(ENV,"GROUPAREN")
         for i ∈ 1:N-M
-            printnum(io, name[i], x.v[i])
+            printnum(io, name[i], xv[i])
         end
-        n = sum(first(x.v,N-M).<0)
+        n = sum(first(xv,N-M).<0)
         n>0 && print(io, '/')
         n>1 && print(io, '(')
         for i ∈ 1:N-M
-            printnum(io, name[i], -x.v[i])
-            typeof(name[i])==String && isone(x.v[i]) && !iszero(norm(last(first(x.v,N-M),N-i-1))) && print(io,'*')
+            printnum(io, name[i], -xv[i])
+            typeof(name[i])==String && isone(xv[i]) && !iszero(norm(last(first(xv,N-M),N-i-1))) && print(io,'*')
         end
         n>1 && print(io, ')')
     else
         for i ∈ 1:N-M
-            printexpo(io, name[i], makeint(x.v[i]))
-            typeof(name[i])==String && isone(x.v[i]) && !iszero(norm(last(first(x.v,N-M),N-i-M))) && print(io,'⋅')
+            str = isgroup(name[i]) || isring(name[i]) ? "($(name[i]))" : name[i]
+            printexpo(io, str, makeint(xv[i]))
+            typeof(name[i])==String && isone(xv[i]) && !iszero(norm(last(first(xv,N-M),N-i-M))) && print(io,'⋅')
         end
     end
 end
@@ -427,27 +428,30 @@ function print_special(io,f::Float64)
     end
 end
 
-Base.show(io::IO,x::Group) = showgroup(io,x)
-function showgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
-    #back = T<:AbstractFloat && x.v[N]<0
-    #!back && printexpo(io, 10, x.v[N])
-    printdims(io,x,u)
-    iz = iszero(norm(x.v))
-    xc = coef(x)
+function showgroup_pre2(io::IO,xc,xv,c='𝟙')#,back)
+    iz = iszero(norm(xv))
     iz && (isone(xc)||abs(measure(xc))<1) && print(io, c)
-    #back && printexpo(io, 10, last(x.v))
+    #back && printexpo(io, 10, last(xv))
     if !isone(xc)
         if float(abs(measure(xc)))<1 && !isgroup(xc)
             print(io,'/',makeint(inv(xc)))
         else
             !iz && print(io, '⋅')
-            if isgroup(xc)
+            if isgroup(xc) || isring(xc)
                 print(io, '(', makeint(xc), ')')
             else
                 print(io, makeint(xc))
             end
         end
     end
+end
+
+Base.show(io::IO,x::Group) = showgroup(io,x)
+function showgroup_pre(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
+    #back = T<:AbstractFloat && x.v[N]<0
+    #!back && printexpo(io, 10, x.v[N])
+    printdims(io,x.v,u)
+    showgroup_pre2(io,coef(x),x.v,c)#,back)
 end
 function showgroup(io::IO,x::Group{G,T,S,N} where {G,S},u=basistext(x),c='𝟙') where {T,N}
     showgroup_pre(io,x,u,c)
@@ -611,7 +615,7 @@ times(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = Group{G,T}(a.v,coefprod(coe
 #####
 
 @pure basistext(x::Group{G,T,S,N} where {G,T,S}) where N = letters(N)
-printdims(io::IO,x::Group) = printdims(io,x,basistext(x))
+printdims(io::IO,x::Group) = printdims(io,x.v,basistext(x))
 
 using SyntaxTree
 

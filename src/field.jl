@@ -14,13 +14,35 @@
 
 export Composite, Field
 
-struct Composite{G,F,T,S,N} <: AbstractModule
+struct Composite{G,F,T,S,N} <: AbelianRing
     f::Values{N,F}
     v::Values{N,T}
     c::S
 end
 
-struct Field{G,F,T,S,N,M} <: AbstractModule
+coef(x::Composite) = x.c
+basistext(x::Composite) = x.f
+
+hasproduct(::Composite) = false
+
+Base.:(==)(a::Composite,b::Composite) = a.f == b.f && a.v == b.v && a.c == b.c
+
+Base.show(io::IO,x::Composite) = showgroup(io,x)
+function showgroup_pre(io::IO,x::Composite{G,F,T,S,N} where {G,S},c='𝟙') where {F,T,N}
+    #back = T<:AbstractFloat && x.v[N]<0
+    #!back && printexpo(io, 10, x.v[N])
+    printdims(io,x.v,x.f)
+    showgroup_pre2(io,coef(x),x.v,c)#,back)
+end
+function showgroup(io::IO,x::Composite{G,F,T,S,N} where {G,S},c='𝟙') where {F,T,N}
+    showgroup_pre(io,x,c)
+    if hasproduct(x)
+        print(io, " = ", product(x))
+        #print_special(io, product(x))
+    end
+end
+
+struct Field{G,F,T,S,N,M} <: AbelianRing
     f::Values{N,F}
     v::Values{M,Values{N,T}}
     c::Values{M,S}
@@ -49,11 +71,13 @@ Base.length(g::Field{G,F,T,S,N,M} where {G,F,T,S,N}) where M = M
 
 Base.signbit(::Field) = false
 
+Base.:(==)(a::Field,b::Field) = a.f == b.f && a.v == b.v && a.c == b.c
+
 Base.zero(::Type{Field{G}}) where G = zero(Field{G,Int,Int,Int})
 Base.one(::Type{Field{G}}) where G = one(Field{G,Int,Int,Int})
 
 Base.zero(::Type{Field{G,F,T,S}}) where {G,F,T,S} = Field{G,F,T,S,0,0}(Values{0,F}(),Values{0,Values{0,T}}(),Values{0,S}())
-Base.zero(::Field{G,F,T,S}) where {G,F,T,S} = Field{G,F,T,S,N,0}(Values{0,F}(),Values{0,Values{0,T}}(),Values{0,S}())
+Base.zero(::Field{G,F,T,S}) where {G,F,T,S} = Field{G,F,T,S,0,0}(Values{0,F}(),Values{0,Values{0,T}}(),Values{0,S}())
 Base.one(::Type{Field{G,F,T,S}}) where {G,F,T,S} = Field{G,F,T,S,1,1}(Values{1,F}(one(F)),Values{1,Values{1,T}}((zeros(Values{1,T}),)),Values{1,S}(one(S)))
 Base.one(::Field{G,F,T,S}) where {G,F,T,S} = Field{G,F,T,S,1,1}(Values{1,F}(one(F)),Values{1,Values{1,T}}((zeros(Values{1,T}),)),Values{1,S}(one(S)))
 
@@ -61,10 +85,17 @@ Base.one(::Field{G,F,T,S}) where {G,F,T,S} = Field{G,F,T,S,1,1}(Values{1,F}(one(
 #(f::Field{G,F,T,S,N,M})(args...) where {G,F,T,S,N,M} = f(Values(args...))
 
 Base.inv(a::Field{G,F,T,S,N,1}) where {G,F,T,S,N} = Field{G,F,T,S,N,1}(a.f,-a.v,Values(inv(a.c[1])))
+Base.inv(a::Field{G,F,T,S,N,0}) where {G,F,T,S,N} = Inf
+Base.inv(a::Field{G}) where G = Field{G,Number,Int,Int,1,1}(Values((a,)),Values((Values(-1),)),Values(1))
+Base.inv(a::Ring{G}) where G = Field{G,Number,Int,Int,1,1}(Values((a,)),Values((Values(-1),)),Values(1))
 Base.:*(a::Number,b::Field{G}) where G = times(factorize(a,Val(G)),b)
 Base.:*(a::Field{G},b::Number) where G = times(a,factorize(b,Val(G)))
 Base.:/(a::Number,b::Field) = a*inv(b)#
 Base.:/(a::Field{G},b::Number) where G = times(a,inv(factorize(b,Val(G))))#
+Base.:+(a::Number,b::Field{G}) where G = a*one(b)+b
+Base.:+(a::Field{G},b::Number) where G = a+one(a)*b
+Base.:-(a::Number,b::Field) = a*one(b)-b
+Base.:-(a::Field{G},b::Number) where G = a-b*one(a)
 
 times(a::Field,b::Field) = a*b
 times(a::Number,b::Field{G,F,T}) where {G,F,T} = Field{G,F,T}(b.f,b.v,coefprod.(Ref(a),b.c))
@@ -72,49 +103,44 @@ times(a::Field{G,F,T},b::Number) where {G,F,T} = Field{G,F,T}(a.f,a.v,coefprod(a
 
 Base.:-(f::Field{G,F,T,S,N,M}) where {G,F,T,S,N,M} = Field{G,F,T,S,N,M}(f.f,f.v,-f.c)
 
-function Base.:+(a::Composite{G,F,T,S,N},b::Composite{G,F,T,S,N}) where {G,F,T,S,N}
+function Base.:+(a::Composite{G,F,T,S,N1},b::Composite{G,F,T,S,N2}) where {G,F,T,S,N1,N2}
     if a.f≠b.f
-        add(Field{G,F,T,S,N,1}(a.f,Values((a.v,)),Values(a.c)),b.f,b.v,b.c,Val(+))
+        add(Field{G,F,T,S,N1,1}(a.f,Values((a.v,)),Values(a.c)),b.f,b.v,b.c,Val(+))
     elseif a.v≠b.v
-        Field{G,F,T,S,N,2}(a.f,Values(a.v,b.v),Values(a.c,b.c))
+        Field{G,F,T,S,N1,2}(a.f,Values(a.v,b.v),Values(a.c,b.c))
     else
-        Field{G,F,T,S,N,1}(a.f,Values((a.v,)),Values(a.c+b.c))
+        Field{G,F,T,S,N1,1}(a.f,Values((a.v,)),Values(a.c+b.c))
     end
 end
-function Base.:-(a::Composite{G,F,T,S,N},b::Composite{G,F,T,S,N}) where {G,F,T,S,N}
+function Base.:-(a::Composite{G,F,T,S,N1},b::Composite{G,F,T,S,N2}) where {G,F,T,S,N1,N2}
     if a.f≠b.f
-        add(Field{G,F,T,S,N,1}(a.f,Values((a.v,)),Values(a.c)),b.f,b.v,b.c,Val(-))
+        add(Field{G,F,T,S,N1,1}(a.f,Values((a.v,)),Values(a.c)),b.f,b.v,b.c,Val(-))
     elseif a.v≠b.v
-        Field{G,F,T,S,N,2}(a.f,Values(a.v,b.v),Values(a.c,-b.c))
+        Field{G,F,T,S,N1,2}(a.f,Values(a.v,b.v),Values(a.c,-b.c))
     else
-        Field{G,F,T,S,N,1}(a.f,Values((a.v,),Values(a.c-b.c)))
+        Field{G,F,T,S,N1,1}(a.f,Values((a.v,),Values(a.c-b.c)))
     end
 end
-function Base.:+(a::Field{G,F,T,S,N,1},b::Field{G,F,T,S,N,1}) where {G,F,T,S,N}
+function Base.:+(a::Field{G,F,T,S,N1,1},b::Field{G,F,T,S,N2,1}) where {G,F,T,S,N1,N2}
     if a.f≠b.f
         add(a,b.f,b.v[1],b.c[1],Val(+))
     elseif a.v≠b.v
-        Field{G,F,T,S,N,2}(a.f,Values(a.v[1],b.v[1]),Values(a.c[1],b.c[1]))
+        Field{G,F,T,S,N1,2}(a.f,Values(a.v[1],b.v[1]),Values(a.c[1],b.c[1]))
     else
-        Field{G,F,T,S,N,1}(a.f,a.v,a.c+b.c)
+        Field{G,F,T,S,N1,1}(a.f,a.v,a.c+b.c)
     end
 end
-function Base.:-(a::Field{G,F,T,S,N,1},b::Field{G,F,T,S,N,1}) where {G,F,T,S,N}
+function Base.:-(a::Field{G,F,T,S,N1,1},b::Field{G,F,T,S,N2,1}) where {G,F,T,S,N1,N2}
     if a.f≠b.f
         add(a,b.f,b.v[1],b.c[1],Val(-))
     elseif a.v≠b.v
-        Field{G,F,T,S,N,2}(a.f,Values(a.v[1],b.v[1]),Values(a.c[1],-b.c[1]))
+        Field{G,F,T,S,N1,2}(a.f,Values(a.v[1],b.v[1]),Values(a.c[1],-b.c[1]))
     else
-        Field{G,F,T,S,N,1}(a.f,a.v,a.c-b.c)
+        Field{G,F,T,S,N1,1}(a.f,a.v,a.c-b.c)
     end
 end
-Base.:+(a::Field{G,F,T,S,N,0},b::Field{G,F,T,S,N,0}) where {G,F,T,S,N} = a
-Base.:-(a::Field{G,F,T,S,N,0},b::Field{G,F,T,S,N,0}) where {G,F,T,S,N} = a
-
-pad(a::Values,::Val{M}) where M = Values(a...,zeros(Values{M,Int})...)
-pad(a::Values{N},b::Values{M,T}) where {N,M,T} = (pad.(a,Val(M)),Values(zeros(Values{N,T})...,b...))
-pad2(b::Values,::Val{N}) where N = Values(zeros(Values{N,Int})...,b...)
-pad2(a::Values{N},b::Values{N2,Values{M,T}}) where {N,N2,M,T} = (pad.(a,Val(M)),pad2.(b,Val(N)))
+Base.:+(a::Field{G,F,T,S,N1,0},b::Field{G,F,T,S,N2,0}) where {G,F,T,S,N1,N2} = a
+Base.:-(a::Field{G,F,T,S,N1,0},b::Field{G,F,T,S,N2,0}) where {G,F,T,S,N1,N2} = a
 
 Base.:+(a::Field{G,F,T,S},b::Composite{G,F,T,S}) where {G,F,T,S} = add(a,b.f,b.v,b.c,Val(+))
 Base.:-(a::Field{G,F,T,S},b::Composite{G,F,T,S}) where {G,F,T,S} = add(a,b.f,b.v,b.c,Val(-))
@@ -202,6 +228,12 @@ function ad(::Type{Field{G,F,T,S,N,M}},av,bv,of,ac,bc::Values{L},::Val{-}) where
     end
 end
 
+pad(a::Values{M,T} where M,::Val{N}) where {N,T} = Values(a...,zeros(Values{N,T})...)
+pad(a::Values{M,Values{N1,T1}},b::Values{N2,T2}) where {N1,N2,M,T1,T2} = (pad.(a,Val(N2)),pad2(b,Val(N1)))
+pad(a::Values{M1,Values{N1,T1}},b::Values{M2,Values{N2,T2}}) where {N1,N2,M1,M2,T1,T2} = (pad.(a,Val(N2)),pad2.(b,Val(N1)))
+pad2(b::Values{M,T} where M,::Val{N}) where {T,N} = Values(zeros(Values{N,T})...,b...)
+pad2(a::Values{M1,Values{N1,T1}},b::Values{M2,Values{N2,T2}}) where {N1,N2,M1,M2,T1,T2} = (pad.(a,Val(N2)),pad2.(b,Val(N1)))
+
 function stuff(var,in,as,bs)
     out = zeros(var)
     out[as] = in[bs]
@@ -214,10 +246,10 @@ let combine = quote
         bp1 = [findfirst(z->z==a.f[i],bf) for i ∈ ap]
         lbp = length(bp1)
         bp = Values{lbp,Int}(bp1...)
-        be1 = [i for i∈1:N2 if i∉bp]
+        be1 = [i for i∈countvalues(1,N2) if i∉bp]
         lbe = length(be1)
         be = Values{lbe,Int}(be1...)
-        ae = countvalues(N1+1,N+lbe)
+        ae = countvalues(N1+1,N1+lbe)
         as,bs = Values(ap...,ae...),Values(bp...,be...)
         obv1 = Variables{N1+lbe,Int}
     end
@@ -309,24 +341,35 @@ let combine = quote
             end
             field(oav.-Ref(obv),a.c./Ref(b.c))
         end
-        Base.:/(a::Composite{G,F,T,S,N1},b::Field{G,F,T,S,N2,M}) where {G,F,T,S,N1,N2,M} = Field(a)*b
+        Base.:/(a::Composite{G,F,T,S,N1},b::Field{G,F,T,S,N2,M}) where {G,F,T,S,N1,N2,M} = Field(a)/b
+        Base.:/(a::Field{G,F,T,S,N1,M},b::Field{G,F,T,S,N2,L}) where {G,F,T,S,N1,N2,M,L} = a*inv(b)
         function Base.:*(a::Field{G,F,T,S,N1,M},b::Field{G,F,T,S,N2,L}) where {G,F,T,S,N1,N2,M,L}
             ap1 = findall(z->z∈b.f,a.f)
-            field,oav,obv,of = if isempty(ap1)
-                (Composite{G,F,T,S,N1+N2},pad2(a.v,b.v)...,Values((a.f...,b.f...)))
+            field,obv,of = if isempty(ap1)
+                (Composite{G,F,T,S,N1+N2},pad2.(b.v,Val(N1)),Values((a.f...,b.f...)))
             else
                 bf = b.f
                 $combine
-                Composite{G,F,T,S,N1+lbe},pad.(a.v,Val(lbe)),stuff.(obv1,b.v,Ref(as),Ref(bs)),Values((a.f...,b.f[be]...))
+                Composite{G,F,T,S,N1+lbe},stuff.(obv1,b.v,Ref(as),Ref(bs)),Values((a.f...,b.f[be]...))
             end
             s = zero(Field{G,F,T,S})
             for i ∈ 1:L
-                s += a*field(of,b.v[i],b.c[i])
+                s += a*field(of,obv[i],b.c[i])
             end
             return s
         end
     end
 end
+
+Base.:+(a::Field{G},b::Ring{G}) where G = a+Field(b)
+Base.:+(a::Ring{G},b::Field{G}) where G = Field(a)+b
+Base.:-(a::Field{G},b::Ring{G}) where G = a-Field(b)
+Base.:-(a::Ring{G},b::Field{G}) where G = Field(a)-b
+Base.:*(a::Field{G},b::Ring{G}) where G = a*Field(b)
+Base.:*(a::Ring{G},b::Field{G}) where G = Field(a)*b
+Base.:/(a::Field{G},b::Ring{G}) where G = a/Field(b)
+Base.:/(a::Ring{G},b::Field{G}) where G = Field(a)/b
+Base.:/(a::Ring{G},b::Ring{G}) where G = Field(a)/Field(b)
 
 Base.show(io::IO,::Field{G,F,T,S,N,0}) where {G,F,T,S,N} = print(io,"𝟎")
 
@@ -339,3 +382,6 @@ function Base.show(io::IO,p::Field{G,F,T,S,N,M}) where {G,F,T,S,N,M}
         end
     end
 end
+
+Base.:(==)(a::Ring,b::Field) = false
+Base.:(==)(a::Field,b::Ring) = false

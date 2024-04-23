@@ -1,7 +1,7 @@
 name = "FieldAlgebra"
 uuid = "0b62d163-fd1d-4060-a953-4385d03545e2"
 authors = ["Michael Reed"]
-version = "0.1.6"
+version = "0.1.7"
 
 [deps]
 AbstractTensors = "a8e43f4a-99b7-5565-8bf1-0165161caaea"
@@ -10,7 +10,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 SyntaxTree = "a4af3ec5-f8ac-5fed-a759-c2e80b4d74cb"
 
 [compat]
-AbstractTensors = "0.6,0.7"
+AbstractTensors = "0.6,0.7,0.8"
 FieldConstants = "0.1"
 SyntaxTree = "1"
 julia = "1"

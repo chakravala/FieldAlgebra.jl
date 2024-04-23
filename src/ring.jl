@@ -14,7 +14,9 @@
 
 export Ring
 
-struct Ring{G,T,S,N,M} <: AbstractModule
+abstract type AbelianRing <: AbstractModule end
+
+struct Ring{G,T,S,N,M} <: AbelianRing
     v::Values{M,Values{N,T}}
     c::Values{M,S}
     @pure function Ring{G,T,S,N,M}(v,c) where {G,T,S,N,M}
@@ -30,6 +32,10 @@ struct Ring{G,T,S,N,M} <: AbstractModule
         new{G,eltype(r),eltype(p),N,M}(r,p)
     end
 end
+
+isring(::AbelianRing) = true
+isring(::Constant{G}) where G = isring(G)
+isring(x) = false
 
 Ring(g::Group{G,T,S,N}) where {G,T,S,N} = Ring{G,T,S,N,1}(Values((g.v,)),Values(g.c))
 
@@ -53,6 +59,8 @@ Base.length(g::Ring{G,T,S,N,M} where {G,T,S,N}) where M = M
 
 Base.signbit(::Ring) = false
 
+Base.:(==)(a::Ring,b::Ring) = a.v == b.v && a.c == b.c
+
 Base.zero(::Type{Ring{G,T,S,N}}) where {G,T,S,N} = Ring{G,T,S,N,0}(Values{0,Values{N,T}}(),Values{0,S}())
 Base.zero(::Ring{G,T,S,N}) where {G,T,S,N} = Ring{G,T,S,N,0}(Values{0,Values{N,T}}(),Values{0,S}())
 Base.one(::Type{Ring{G,T,S,N}}) where {G,T,S,N} = Ring{G,T,S,N,1}(Values{1,Values{N,T}}((zeros(Values{N,T}),)),Values{1,S}(1))
@@ -62,10 +70,15 @@ Base.one(::Ring{G,T,S,N}) where {G,T,S,N} = Ring{G,T,S,N,1}(Values{1,Values{N,T}
 (f::Ring{G,T,S,N,M})(args...) where {G,T,S,N,M} = f(Values(args...))
 
 Base.inv(a::Ring{G,T,S,N,1}) where {G,T,S,N} = Ring{G,T,S,N,1}(-a.v,Values(inv(a.c[1])))
+Base.inv(a::Ring{G,T,S,N,0}) where {G,T,S,N} = Inf
 Base.:*(a::Number,b::Ring{G}) where G = times(factorize(a,Val(G)),b)
 Base.:*(a::Ring{G},b::Number) where G = times(a,factorize(b,Val(G)))
 Base.:/(a::Number,b::Ring) = a*inv(b)#
 Base.:/(a::Ring{G},b::Number) where G = times(a,inv(factorize(b,Val(G))))#
+Base.:+(a::Number,b::Ring{G}) where G = a*one(b)+b
+Base.:+(a::Ring{G},b::Number) where G = a+b*one(a)
+Base.:-(a::Number,b::Ring) = a*one(b)-b
+Base.:-(a::Ring{G},b::Number) where G = a-b*one(a)
 
 times(a::Ring,b::Ring) = a*b
 times(a::Number,b::Ring{G,T}) where {G,T} = Ring{G,T}(b.v,coefprod.(Ref(a),b.c))

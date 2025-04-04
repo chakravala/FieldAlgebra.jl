@@ -602,16 +602,18 @@ Base.inv(a::Group{G,T}) where {G,T} = Group{G,T}(-a.v,inv(coef(a)))
 
 @pure valueat(::Val{j},::Val{k},::Val{name}) where {j,k,name} = valueat(j,k,name)
 valueat(j,k,n,z::T=1) where T = Group{n,T,Int,k}(Values{k,T}([i==j ? z : 0 for i ∈ 1:k]),1)
-Base.:*(a::Number,b::Group{G,T,S,N}) where {G,T,S,N} = times(factorize(a,Val(G)),b)
-Base.:*(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = times(a,factorize(b,Val(G)))
-Base.:*(a::Constant,b::Group{G,T,S,N}) where {G,T,S,N} = FieldConstants.param(a)*b
-Base.:*(a::Group{G,T,S,N},b::Constant) where {G,T,S,N} = a*FieldConstants.param(b)
-Base.:/(a::Number,b::Group) = a*inv(b)#
-Base.:/(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = times(a,inv(factorize(b,Val(G))))#
+Base.:*(a::Real,b::Group{G,T,S,N}) where {G,T,S,N} = times(factorize(a,Val(G)),b)
+Base.:*(a::Group{G,T,S,N},b::Real) where {G,T,S,N} = times(a,factorize(b,Val(G)))
+Base.:*(a::Constant,b::Group) = FieldConstants.param(a)*b
+Base.:*(a::Group,b::Constant) = a*FieldConstants.param(b)
+Base.:/(a::Real,b::Group) = a*inv(b)#
+Base.:/(a::Group{G,T,S,N},b::Real) where {G,T,S,N} = times(a,inv(factorize(b,Val(G))))#
+Base.:/(a::Constant,b::Group) = FieldConstants.param(a)/b
+Base.:/(a::Group,b::Constant) = a/FieldConstants.param(b)
 
 times(a::Group,b::Group) = a*b
-times(a::Number,b::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T}(b.v,coefprod(a,coef(b)))
-times(a::Group{G,T,S,N},b::Number) where {G,T,S,N} = Group{G,T}(a.v,coefprod(coef(a),b))
+times(a::Real,b::Group{G,T,S,N}) where {G,T,S,N} = Group{G,T}(b.v,coefprod(a,coef(b)))
+times(a::Group{G,T,S,N},b::Real) where {G,T,S,N} = Group{G,T}(a.v,coefprod(coef(a),b))
 
 #####
 
@@ -650,7 +652,7 @@ checkdiv(x::Expr) = x.head == :call ? (x.args[1] == :≡ || (x.args[1] ≠ :≈ 
 checkdiv(x::Number) = isinteger(x)
 checkdiv(x) = false
 
-export @group, @ring
+export @group, @ring, @group2, @constgroup
 
 @pure product(::Constant{N}) where N = product(N)
 hasproduct(x::LogGroup) = hasproduct(x.v)
@@ -662,11 +664,19 @@ macro ring(arg...)
     ring(arg...)
 end
 macro group(arg...)
-    group(arg...)
+    constgroup(arg...)
+end
+macro group2(arg...)
+    group2(arg...)
+end
+macro constgroup(arg...)
+    constgroup(arg...)
 end
 
 ring(arg...) = define(:Ring,arg...)
-group(arg...) = define(:Constant,arg...)
+group2(arg...) = define(:Group,arg...)
+constgroup(arg...) = define(:Constant,arg...)
+const group = constgroup # change to group2
 
 function define(fun,arg...)
     args = length(arg)==2 ? linefilter!(arg[2]).args : collect(arg[2:end])

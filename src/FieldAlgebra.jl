@@ -20,7 +20,7 @@ module FieldAlgebra
 # |_|   |_|\___|_|\__,_/_/   \_\_|\__, |\___|_.__/|_|  \__,_|
 #                                 |___/
 
-import Base: @pure
+import Base: @pure, product
 import FieldConstants
 import AbstractTensors: TupleVector, Values, value, Variables, countvalues
 using LinearAlgebra
